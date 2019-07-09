@@ -33,7 +33,7 @@ describe('<Grow />', () => {
       classes: {},
       inheritComponent: Transition,
       mount,
-      skip: ['componentProp', 'refForwarding'],
+      skip: ['componentProp', 'refForwarding', 'jsonRendered'],
     }),
   );
 

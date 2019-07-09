@@ -33,7 +33,7 @@ describe('<Slide />', () => {
       inheritComponent: Transition,
       mount,
       refInstanceof: React.Component,
-      skip: ['componentProp', 'refForwarding'],
+      skip: ['componentProp', 'refForwarding', 'jsonRendered'],
     }),
   );
 

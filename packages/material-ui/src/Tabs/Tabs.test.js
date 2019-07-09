@@ -54,6 +54,7 @@ describe('<Tabs />', () => {
     inheritComponent: 'div',
     mount,
     refInstanceof: window.HTMLDivElement,
+    skip: ['jsonRendered'],
   }));
 
   describe('warnings', () => {
