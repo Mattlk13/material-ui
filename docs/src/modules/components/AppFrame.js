@@ -1,298 +1,261 @@
-import React from 'react';
+import * as React from 'react';
 import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
-import compose from 'recompose/compose';
+import { useRouter } from 'next/router';
+import GlobalStyles from '@mui/material/GlobalStyles';
+import { styled, alpha } from '@mui/material/styles';
 import NProgress from 'nprogress';
-import Router from 'next/router';
-import { withStyles } from '@material-ui/core/styles';
-import Typography from '@material-ui/core/Typography';
-import AppBar from '@material-ui/core/AppBar';
-import Toolbar from '@material-ui/core/Toolbar';
-import IconButton from '@material-ui/core/IconButton';
-import Tooltip from '@material-ui/core/Tooltip';
-import CssBaseline from '@material-ui/core/CssBaseline';
-import MenuIcon from '@material-ui/icons/Menu';
-import LanguageIcon from '@material-ui/icons/Language';
-import Menu from '@material-ui/core/Menu';
-import MenuItem from '@material-ui/core/MenuItem';
-import ColorsIcon from '@material-ui/icons/InvertColors';
-import LightbulbOutlineIcon from '@material-ui/docs/svgIcons/LightbulbOutline';
-import LightbulbFullIcon from '@material-ui/docs/svgIcons/LightbulbFull';
-import NProgressBar from '@material-ui/docs/NProgressBar';
-import FormatTextdirectionLToR from '@material-ui/icons/FormatTextdirectionLToR';
-import FormatTextdirectionRToL from '@material-ui/icons/FormatTextdirectionRToL';
-import GithubIcon from '@material-ui/docs/svgIcons/GitHub';
-import Link from 'docs/src/modules/components/Link';
-import AppDrawer from 'docs/src/modules/components/AppDrawer';
-import AppSearch from 'docs/src/modules/components/AppSearch';
+import CssBaseline from '@mui/material/CssBaseline';
+import AppBar from '@mui/material/AppBar';
+import Stack from '@mui/material/Stack';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import Box from '@mui/material/Box';
+import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import NProgressBar from '@mui/docs/NProgressBar';
+import { debounce } from '@mui/material/utils';
+import SvgHamburgerMenu from 'docs/src/icons/SvgHamburgerMenu';
+import AppNavDrawer from 'docs/src/modules/components/AppNavDrawer';
+import AppSettingsDrawer from 'docs/src/modules/components/AppSettingsDrawer';
 import Notifications from 'docs/src/modules/components/Notifications';
-import PageTitle from 'docs/src/modules/components/PageTitle';
-import { ACTION_TYPES } from 'docs/src/modules/constants';
+import MarkdownLinks from 'docs/src/modules/components/MarkdownLinks';
+import SkipLink from 'docs/src/modules/components/SkipLink';
+import PageContext from 'docs/src/modules/components/PageContext';
+import { useTranslate } from '@mui/docs/i18n';
+import LogoWithCopyMenu from 'docs/src/components/action/LogoWithCopyMenu';
+import AppFrameBanner from 'docs/src/components/banner/AppFrameBanner';
 
-Router.onRouteChangeStart = () => {
+const nProgressStart = debounce(() => {
   NProgress.start();
-};
+}, 200);
 
-Router.onRouteChangeComplete = () => {
+function nProgressDone() {
+  nProgressStart.clear();
   NProgress.done();
-};
+}
 
-Router.onRouteChangeError = () => {
-  NProgress.done();
-};
+export function NextNProgressBar() {
+  const router = useRouter();
+  React.useEffect(() => {
+    const handleRouteChangeStart = (url, { shallow }) => {
+      if (!shallow) {
+        nProgressStart();
+      }
+    };
 
-const styles = theme => ({
-  root: {
+    const handleRouteChangeDone = (url, { shallow }) => {
+      if (!shallow) {
+        nProgressDone();
+      }
+    };
+
+    router.events.on('routeChangeStart', handleRouteChangeStart);
+    router.events.on('routeChangeComplete', handleRouteChangeDone);
+    router.events.on('routeChangeError', handleRouteChangeDone);
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChangeStart);
+      router.events.off('routeChangeComplete', handleRouteChangeDone);
+      router.events.off('routeChangeError', handleRouteChangeDone);
+    };
+  }, [router]);
+
+  return <NProgressBar />;
+}
+
+const sx = { minWidth: { sm: 160 } };
+
+const AppSearch = React.lazy(() => import('docs/src/modules/components/AppSearch'));
+
+export function DeferredAppSearch() {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <React.Fragment>
+      {/* Suspense isn't supported for SSR yet */}
+      {mounted ? (
+        <React.Suspense fallback={<Box sx={sx} />}>
+          <AppSearch sx={sx} />
+        </React.Suspense>
+      ) : (
+        <Box sx={sx} />
+      )}
+    </React.Fragment>
+  );
+}
+
+const RootDiv = styled('div')(({ theme }) => {
+  return {
     display: 'flex',
-  },
-  grow: {
-    flex: '1 1 auto',
-  },
-  title: {
-    marginLeft: 24,
-    flex: '0 1 auto',
-  },
-  appBar: {
-    transition: theme.transitions.create('width'),
-    '@media print': {
-      position: 'absolute',
-    },
-  },
-  appBarHome: {
-    boxShadow: 'none',
-  },
-  appBarShift: {
-    [theme.breakpoints.up('lg')]: {
-      width: 'calc(100% - 240px)',
-    },
-  },
-  drawer: {
-    [theme.breakpoints.up('lg')]: {
-      width: 240,
-    },
-  },
-  navIconHide: {
-    [theme.breakpoints.up('lg')]: {
-      display: 'none',
-    },
-  },
+    ...theme.applyDarkStyles({
+      background: (theme.vars || theme).palette.primaryDark[900],
+    }),
+    // TODO: Should be handled by the main component
+  };
 });
 
-class AppFrame extends React.Component {
-  state = {
-    languageMenu: null,
-    mobileOpen: false,
-  };
-
-  handleDrawerOpen = () => {
-    this.setState({ mobileOpen: true });
-  };
-
-  handleDrawerClose = () => {
-    this.setState({ mobileOpen: false });
-  };
-
-  handleLanguageIconClick = event => {
-    this.setState({ languageMenu: event.currentTarget });
-  };
-
-  handleLanguageMenuClose = () => {
-    this.setState({ languageMenu: null });
-  };
-
-  handleLanguageMenuItemClick = lang => () => {
-    if (lang !== this.props.userLanguage) {
-      document.cookie = `lang=${lang};path=/;max-age=31536000`;
-      window.location.reload();
-    }
-    this.handleLanguageMenuClose();
-  };
-
-  handleTogglePaletteType = () => {
-    const paletteType = this.props.reduxTheme.paletteType === 'light' ? 'dark' : 'light';
-    document.cookie = `paletteType=${paletteType};path=/;max-age=31536000`;
-
-    this.props.dispatch({
-      type: ACTION_TYPES.THEME_CHANGE,
-      payload: {
-        paletteType,
+const StyledAppBar = styled(AppBar, {
+  shouldForwardProp: (prop) => prop !== 'disablePermanent',
+})(({ theme }) => {
+  return {
+    padding: theme.spacing(1.5),
+    transition: theme.transitions.create('width'),
+    justifyContent: 'center',
+    boxShadow: 'none',
+    backdropFilter: 'blur(8px)',
+    borderBottom: `1px solid ${(theme.vars || theme).palette.divider}`,
+    backgroundColor: 'hsla(0, 0%, 100%, 0.6)',
+    color: (theme.vars || theme).palette.grey[800],
+    ...theme.applyDarkStyles({
+      backgroundColor: alpha(theme.palette.primaryDark[900], 0.6),
+      color: (theme.vars || theme).palette.grey[500],
+    }),
+    variants: [
+      {
+        props: ({ disablePermanent }) => disablePermanent,
+        style: {
+          boxShadow: 'none',
+        },
       },
-    });
-  };
-
-  handleToggleDirection = () => {
-    this.props.dispatch({
-      type: ACTION_TYPES.THEME_CHANGE,
-      payload: {
-        direction: this.props.reduxTheme.direction === 'ltr' ? 'rtl' : 'ltr',
+      {
+        props: ({ disablePermanent }) => !disablePermanent,
+        style: {
+          [theme.breakpoints.up('lg')]: {
+            width: 'calc(100% - var(--MuiDocs-navDrawer-width))',
+          },
+        },
       },
-    });
+    ],
   };
+});
 
-  render() {
-    const { children, classes, reduxTheme, userLanguage } = this.props;
-    const { languageMenu } = this.state;
+const NavIconButton = styled(IconButton, {
+  shouldForwardProp: (prop) => prop !== 'disablePermanent',
+})(({ theme }) => ({
+  variants: [
+    {
+      props: {
+        disablePermanent: false,
+      },
+      style: {
+        [theme.breakpoints.up('lg')]: {
+          display: 'none',
+        },
+      },
+    },
+  ],
+}));
 
-    return (
-      <PageTitle>
-        {title => {
-          let disablePermanent = false;
-          let navIconClassName = '';
-          let appBarClassName = classes.appBar;
+const StyledAppNavDrawer = styled(AppNavDrawer)(({ theme }) => ({
+  variants: [
+    {
+      props: {
+        disablePermanent: false,
+      },
+      style: {
+        [theme.breakpoints.up('lg')]: {
+          flexShrink: 0,
+          width: 'var(--MuiDocs-navDrawer-width)',
+        },
+      },
+    },
+  ],
+}));
 
-          if (title === null) {
-            // home route, don't shift app bar or dock drawer
-            disablePermanent = true;
-            appBarClassName += ` ${classes.appBarHome}`;
-          } else {
-            navIconClassName = classes.navIconHide;
-            appBarClassName += ` ${classes.appBarShift}`;
-          }
+export const HEIGHT = 57;
 
-          return (
-            <div className={classes.root}>
-              <NProgressBar />
-              <CssBaseline />
-              <AppBar className={appBarClassName}>
-                <Toolbar>
-                  <IconButton
-                    color="inherit"
-                    aria-label="Open drawer"
-                    onClick={this.handleDrawerOpen}
-                    className={navIconClassName}
-                  >
-                    <MenuIcon />
-                  </IconButton>
-                  {title !== null && (
-                    <Typography className={classes.title} variant="h6" color="inherit" noWrap>
-                      {title}
-                    </Typography>
-                  )}
-                  <div className={classes.grow} />
-                  <AppSearch />
-                  <Tooltip title="Change language" enterDelay={300}>
-                    <IconButton
-                      color="inherit"
-                      aria-owns={languageMenu ? 'language-menu' : undefined}
-                      aria-haspopup="true"
-                      onClick={this.handleLanguageIconClick}
-                      data-ga-event-category="AppBar"
-                      data-ga-event-action="language"
-                    >
-                      <LanguageIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Menu
-                    id="language-menu"
-                    anchorEl={languageMenu}
-                    open={Boolean(languageMenu)}
-                    onClose={this.handleLanguageMenuClose}
-                  >
-                    <MenuItem
-                      selected={userLanguage === 'en'}
-                      onClick={this.handleLanguageMenuItemClick('en')}
-                    >
-                      English
-                    </MenuItem>
-                    <MenuItem
-                      selected={userLanguage === 'zh'}
-                      onClick={this.handleLanguageMenuItemClick('zh')}
-                    >
-                      中文
-                    </MenuItem>
-                    <MenuItem
-                      selected={userLanguage === 'pt'}
-                      onClick={this.handleLanguageMenuItemClick('pt')}
-                    >
-                      Português
-                    </MenuItem>
-                  </Menu>
-                  <Tooltip title="Edit docs colors" enterDelay={300}>
-                    <IconButton
-                      color="inherit"
-                      aria-label="Edit docs colors"
-                      component={Link}
-                      naked
-                      href="/style/color/#color-tool"
-                      data-ga-event-category="AppBar"
-                      data-ga-event-action="colors"
-                    >
-                      <ColorsIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Toggle light/dark theme" enterDelay={300}>
-                    <IconButton
-                      color="inherit"
-                      onClick={this.handleTogglePaletteType}
-                      aria-label="Toggle light/dark theme"
-                      data-ga-event-category="AppBar"
-                      data-ga-event-action="dark"
-                    >
-                      {reduxTheme.paletteType === 'light' ? (
-                        <LightbulbOutlineIcon />
-                      ) : (
-                        <LightbulbFullIcon />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Toggle right-to-left/left-to-right" enterDelay={300}>
-                    <IconButton
-                      color="inherit"
-                      onClick={this.handleToggleDirection}
-                      aria-label="Toggle right-to-left/left-to-right"
-                      data-ga-event-category="AppBar"
-                      data-ga-event-action="rtl"
-                    >
-                      {reduxTheme.direction === 'rtl' ? (
-                        <FormatTextdirectionLToR />
-                      ) : (
-                        <FormatTextdirectionRToL />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="GitHub repository" enterDelay={300}>
-                    <IconButton
-                      component="a"
-                      color="inherit"
-                      href="https://github.com/mui-org/material-ui"
-                      aria-label="GitHub repository"
-                      data-ga-event-category="AppBar"
-                      data-ga-event-action="github"
-                    >
-                      <GithubIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Toolbar>
-              </AppBar>
-              <Notifications />
-              <AppDrawer
-                className={classes.drawer}
-                disablePermanent={disablePermanent}
-                onClose={this.handleDrawerClose}
-                onOpen={this.handleDrawerOpen}
-                mobileOpen={this.state.mobileOpen}
-              />
-              {children}
-            </div>
-          );
-        }}
-      </PageTitle>
-    );
-  }
+export default function AppFrame(props) {
+  const { children, disableDrawer = false, className, BannerComponent = AppFrameBanner } = props;
+  const t = useTranslate();
+
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  const closeDrawer = React.useCallback(() => setMobileOpen(false), []);
+  const openDrawer = React.useCallback(() => setMobileOpen(true), []);
+
+  const { activePage, productIdentifier } = React.useContext(PageContext);
+
+  const disablePermanent = activePage?.disableDrawer === true || disableDrawer === true;
+
+  return (
+    <RootDiv className={className}>
+      <NextNProgressBar />
+      <CssBaseline />
+      <SkipLink />
+      <MarkdownLinks />
+      <StyledAppBar
+        disablePermanent={disablePermanent}
+        sx={{ minHeight: 'var(--MuiDocs-header-height)' }}
+      >
+        <GlobalStyles
+          styles={{
+            ':root': {
+              '--MuiDocs-header-height': `${HEIGHT}px`,
+            },
+          }}
+        />
+        <Stack direction="row" sx={{ alignItems: 'center', position: 'relative', width: '100%' }}>
+          <NavIconButton
+            edge="start"
+            color="primary"
+            size="small"
+            aria-label={t('appFrame.openDrawer')}
+            disablePermanent={disablePermanent}
+            onClick={() => setMobileOpen(true)}
+            sx={{ ml: '1px' }}
+          >
+            <SvgHamburgerMenu />
+          </NavIconButton>
+          <Box sx={{ display: { md: 'flex', lg: 'none' } }}>
+            <LogoWithCopyMenu
+              logo={productIdentifier.logo}
+              logoSvgString={productIdentifier.logoSvg}
+              wordmarkSvgString={productIdentifier.wordmarkSvg}
+              marginLeft
+            />
+          </Box>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ ml: 'auto' }}>
+            <BannerComponent />
+            <DeferredAppSearch />
+            <Tooltip title={t('appFrame.github')} enterDelay={300}>
+              <IconButton
+                component="a"
+                color="primary"
+                size="small"
+                href={process.env.SOURCE_CODE_REPO}
+                data-ga-event-category="header"
+                data-ga-event-action="github"
+              >
+                <GitHubIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Notifications />
+            <Tooltip title={t('appFrame.toggleSettings')} enterDelay={300}>
+              <IconButton color="primary" size="small" onClick={() => setSettingsOpen(true)}>
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+      </StyledAppBar>
+      <StyledAppNavDrawer
+        disablePermanent={disablePermanent}
+        onClose={closeDrawer}
+        onOpen={openDrawer}
+        mobileOpen={mobileOpen}
+      />
+      {children}
+      <AppSettingsDrawer onClose={() => setSettingsOpen(false)} open={settingsOpen} />
+    </RootDiv>
+  );
 }
 
 AppFrame.propTypes = {
+  BannerComponent: PropTypes.elementType,
   children: PropTypes.node.isRequired,
-  classes: PropTypes.object.isRequired,
-  dispatch: PropTypes.func.isRequired,
-  reduxTheme: PropTypes.object.isRequired,
-  userLanguage: PropTypes.string.isRequired,
+  className: PropTypes.string,
+  disableDrawer: PropTypes.bool,
 };
-
-export default compose(
-  connect(state => ({
-    reduxTheme: state.theme,
-    userLanguage: state.options.userLanguage,
-  })),
-  withStyles(styles),
-)(AppFrame);

@@ -1,211 +1,358 @@
 /* eslint-disable react/no-danger */
-
-import React from 'react';
+import * as React from 'react';
 import PropTypes from 'prop-types';
-import marked from 'marked';
-import warning from 'warning';
 import throttle from 'lodash/throttle';
-import EventListener from 'react-event-listener';
-import { withStyles } from '@material-ui/core/styles';
-import Typography from '@material-ui/core/Typography';
-import { textToHash } from '@material-ui/docs/MarkdownElement/MarkdownElement';
-import Link from 'docs/src/modules/components/Link';
+import { styled, alpha } from '@mui/material/styles';
+import Typography from '@mui/material/Typography';
+import NoSsr from '@mui/material/NoSsr';
+import { Link } from '@mui/docs/Link';
+import { useTranslate } from '@mui/docs/i18n';
+import { samePageLinkNavigation } from 'docs/src/modules/components/MarkdownLinks';
+import TableOfContentsBanner from 'docs/src/components/banner/TableOfContentsBanner';
+import featureToggle from 'docs/src/featureToggle';
+import DiamondSponsors from 'docs/src/modules/components/DiamondSponsors';
 
-let itemsCollector;
-const renderer = new marked.Renderer();
-renderer.heading = (text, level) => {
-  if (level === 2) {
-    itemsCollector.push({
-      text,
-      level,
-      hash: textToHash(text),
-      children: [],
-    });
-  } else if (level === 3) {
-    if (!itemsCollector[itemsCollector.length - 1]) {
-      throw new Error(`Missing parent level for: ${text}`);
-    }
-
-    itemsCollector[itemsCollector.length - 1].children.push({
-      text,
-      level,
-      hash: textToHash(text),
-    });
-  }
-};
-
-function getItems(contents) {
-  itemsCollector = [];
-  marked(contents.join(''), {
-    renderer,
-  });
-
-  return itemsCollector;
-}
-
-const styles = theme => ({
-  root: {
-    top: 70,
-    // Fix IE 11 position sticky issue.
-    marginTop: 70,
-    width: 167,
-    flexShrink: 0,
-    order: 2,
-    position: 'sticky',
-    wordBreak: 'break-word',
-    height: 'calc(100vh - 70px)',
-    overflowY: 'auto',
-    padding: `${theme.spacing.unit * 2}px ${theme.spacing.unit * 2}px ${theme.spacing.unit *
-      2}px 5px`,
-    display: 'none',
-    [theme.breakpoints.up('sm')]: {
-      display: 'block',
-    },
+const Nav = styled('nav')(({ theme }) => ({
+  top: 'var(--MuiDocs-header-height)',
+  marginTop: 'var(--MuiDocs-header-height)',
+  paddingLeft: 6, // Fix truncated focus outline style
+  position: 'sticky',
+  height: 'calc(100vh - var(--MuiDocs-header-height))',
+  overflowY: 'auto',
+  paddingTop: theme.spacing(4),
+  paddingBottom: theme.spacing(7),
+  paddingRight: theme.spacing(4), // We can't use `padding` as stylis-plugin-rtl doesn't swap it
+  display: 'none',
+  scrollbarWidth: 'thin',
+  [theme.breakpoints.up('md')]: {
+    display: 'block',
   },
-  contents: {
-    marginTop: theme.spacing.unit * 2,
-  },
-  ul: {
-    padding: 0,
-    margin: 0,
-    listStyleType: 'none',
-  },
-  item: {
-    fontSize: 13,
-    padding: `${theme.spacing.unit / 2}px 0`,
-  },
+}));
+
+const NavLabel = styled(Typography)(({ theme }) => ({
+  padding: theme.spacing(1, 0, 1, 1.4),
+  fontSize: theme.typography.pxToRem(11),
+  fontWeight: theme.typography.fontWeightSemiBold,
+  textTransform: 'uppercase',
+  letterSpacing: '.1rem',
+  color: (theme.vars || theme).palette.text.tertiary,
+}));
+
+const NavList = styled(Typography)({
+  padding: 0,
+  margin: 0,
+  listStyle: 'none',
 });
 
-function checkDuplication(uniq, item) {
-  warning(!uniq[item.hash], `Table of content: duplicated \`${item.hash}\` item`);
-
-  if (!uniq[item.hash]) {
-    uniq[item.hash] = true;
-  }
-}
-
-class AppTableOfContents extends React.Component {
-  handleScroll = throttle(() => {
-    this.findActiveIndex();
-  }, 166); // Corresponds to 10 frames at 60 Hz.
-
-  constructor(props) {
-    super();
-    this.itemsServer = getItems(props.contents);
-  }
-
-  state = {
-    active: null,
+const NavItem = styled(Link, {
+  shouldForwardProp: (prop) =>
+    prop !== 'active' && prop !== 'secondary' && prop !== 'secondarySubItem',
+})(({ theme }) => {
+  const activeStyles = {
+    borderLeftColor: (theme.vars || theme).palette.primary[200],
+    color: (theme.vars || theme).palette.primary[600],
+    '&:hover': {
+      borderLeftColor: (theme.vars || theme).palette.primary[600],
+      color: (theme.vars || theme).palette.primary[600],
+    },
+  };
+  const activeDarkStyles = {
+    borderLeftColor: (theme.vars || theme).palette.primary[600],
+    color: (theme.vars || theme).palette.primary[300],
+    '&:hover': {
+      borderLeftColor: (theme.vars || theme).palette.primary[400],
+      color: (theme.vars || theme).palette.primary[400],
+    },
   };
 
-  componentDidMount() {
-    this.itemsClient = [];
-    const uniq = {};
+  return [
+    {
+      '--_padding-left': '12px',
+      boxSizing: 'border-box',
+      padding: theme.spacing('6px', 0, '6px', 'var(--_padding-left)'),
+      borderLeft: `1px solid transparent`,
+      display: 'block',
+      fontSize: theme.typography.pxToRem(13),
+      fontWeight: theme.typography.fontWeightMedium,
+      textOverflow: 'ellipsis',
+      overflow: 'hidden',
+      '&:hover': {
+        borderLeftColor: (theme.vars || theme).palette.grey[400],
+        color: (theme.vars || theme).palette.grey[600],
+      },
+      // TODO: We probably want `aria-current="location"` instead.
+      variants: [
+        {
+          props: ({ active }) => !!active,
+          style: activeStyles,
+        },
+        {
+          props: ({ active }) => !active,
+          style: {
+            color: (theme.vars || theme).palette.text.primary,
+          },
+        },
+        {
+          props: ({ secondary }) => secondary,
+          style: {
+            '--_padding-left': theme.spacing(3),
+          },
+        },
+        {
+          props: ({ secondarySubItem }) => secondarySubItem,
+          style: {
+            '--_padding-left': theme.spacing(4.5),
+          },
+        },
+      ],
+      '&:active': activeStyles,
+    },
+    theme.applyDarkStyles({
+      '&:hover': {
+        borderLeftColor: (theme.vars || theme).palette.grey[500],
+        color: (theme.vars || theme).palette.grey[200],
+      },
+      variants: [
+        {
+          props: ({ active }) => !!active,
+          style: activeDarkStyles,
+        },
+        {
+          props: ({ active }) => !active,
+          style: {
+            color: (theme.vars || theme).palette.grey[500],
+          },
+        },
+      ],
+      '&:active': activeDarkStyles,
+    }),
+  ];
+});
 
-    this.itemsServer.forEach(item2 => {
-      checkDuplication(uniq, item2);
-      this.itemsClient.push({
-        ...item2,
-        node: document.getElementById(item2.hash),
+const noop = () => {};
+
+function useThrottledOnScroll(callback, delay) {
+  const throttledCallback = React.useMemo(
+    () => (callback ? throttle(callback, delay) : noop),
+    [callback, delay],
+  );
+
+  React.useEffect(() => {
+    if (throttledCallback === noop) {
+      return undefined;
+    }
+
+    window.addEventListener('scroll', throttledCallback);
+    return () => {
+      window.removeEventListener('scroll', throttledCallback);
+      throttledCallback.cancel();
+    };
+  }, [throttledCallback]);
+}
+
+function flatten(headings) {
+  const itemsWithNode = [];
+
+  headings.forEach((item) => {
+    itemsWithNode.push(item);
+
+    if (item.children.length > 0) {
+      item.children.forEach((subitem) => {
+        itemsWithNode.push(subitem);
       });
+    }
+  });
+  return itemsWithNode;
+}
 
-      if (item2.children.length > 0) {
-        item2.children.forEach(item3 => {
-          checkDuplication(uniq, item3);
-          this.itemsClient.push({
-            ...item3,
-            node: document.getElementById(item3.hash),
-          });
-        });
-      }
-    });
-    this.findActiveIndex();
+function shouldShowJobAd() {
+  const date = new Date();
+  const timeZoneOffset = date.getTimezoneOffset();
+  // Hide for time zones UT+5.5 - UTC+14 & UTC-8 - UTC-12
+  if (timeZoneOffset <= -5.5 * 60 || timeZoneOffset >= 8 * 60) {
+    return false;
   }
+  return true;
+}
 
-  componentWillUnmount() {
-    this.handleScroll.cancel();
-  }
+const showJobAd = featureToggle.enable_job_banner && shouldShowJobAd();
 
-  findActiveIndex = () => {
+export default function AppTableOfContents(props) {
+  const { toc } = props;
+  const t = useTranslate();
+
+  const items = React.useMemo(() => flatten(toc), [toc]);
+  const [activeState, setActiveState] = React.useState(null);
+  const clickedRef = React.useRef(false);
+  const unsetClickedRef = React.useRef(null);
+  const findActiveIndex = React.useCallback(() => {
+    // Don't set the active index based on scroll if a link was just clicked
+    if (clickedRef.current) {
+      return;
+    }
+
     let active;
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      // No hash if we're near the top of the page
+      if (document.documentElement.scrollTop < 200) {
+        active = { hash: null };
+        break;
+      }
 
-    for (let i = 0; i < this.itemsClient.length; i += 1) {
-      const item = this.itemsClient[i];
+      const item = items[i];
+      const node = document.getElementById(item.hash);
 
-      warning(item.node, `Missing node on the item ${JSON.stringify(item, null, 2)}`);
+      if (process.env.NODE_ENV !== 'production') {
+        if (!node) {
+          console.error(`Missing node on the item ${JSON.stringify(item, null, 2)}`);
+        }
+      }
 
       if (
-        item.node &&
-        (document.documentElement.scrollTop < item.node.offsetTop + 100 ||
-          i === this.itemsClient.length - 1)
+        node &&
+        node.offsetTop <
+          document.documentElement.scrollTop + document.documentElement.clientHeight / 8
       ) {
         active = item;
         break;
       }
     }
 
-    if (active && this.state.active !== active.hash) {
-      this.setState({
-        active: active.hash,
-      });
+    if (active && activeState !== active.hash) {
+      setActiveState(active.hash);
+    }
+  }, [activeState, items]);
+
+  // Corresponds to 10 frames at 60 Hz
+  useThrottledOnScroll(items.length > 0 ? findActiveIndex : null, 166);
+
+  const handleClick = (hash) => (event) => {
+    // Ignore click events meant for native link handling, for example open in new tab
+    if (samePageLinkNavigation(event)) {
+      return;
+    }
+
+    // Used to disable findActiveIndex if the page scrolls due to a click
+    clickedRef.current = true;
+    unsetClickedRef.current = setTimeout(() => {
+      clickedRef.current = false;
+    }, 1000);
+
+    if (activeState !== hash) {
+      setActiveState(hash);
     }
   };
 
-  render() {
-    const { classes } = this.props;
-    const { active } = this.state;
+  React.useEffect(
+    () => () => {
+      clearTimeout(unsetClickedRef.current);
+    },
+    [],
+  );
 
-    return (
-      <nav className={classes.root}>
-        {this.itemsServer.length > 0 ? (
-          <React.Fragment>
-            <Typography gutterBottom className={classes.contents}>
-              Contents
+  const itemLink = (item, secondary, secondarySubItem) => (
+    <NavItem
+      display="block"
+      href={`#${item.hash}`}
+      underline="none"
+      onClick={handleClick(item.hash)}
+      active={activeState === item.hash}
+      secondary={secondary}
+      secondarySubItem={secondarySubItem}
+    >
+      <span dangerouslySetInnerHTML={{ __html: item.text }} />
+    </NavItem>
+  );
+
+  return (
+    <Nav aria-label={t('pageTOC')}>
+      <TableOfContentsBanner />
+      <NoSsr>
+        {showJobAd && (
+          <Link
+            href="https://jobs.ashbyhq.com/MUI?utm_source=2vOWXNv1PE"
+            target="_blank"
+            sx={[
+              (theme) => ({
+                mb: 2,
+                p: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                backgroundColor: alpha(theme.palette.grey[50], 0.4),
+                border: '1px solid',
+                borderColor: (theme.vars || theme).palette.grey[200],
+                borderRadius: 1,
+                transitionProperty: 'all',
+                transitionTiming: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                transitionDuration: '150ms',
+                '&:hover, &:focus-visible': {
+                  borderColor: (theme.vars || theme).palette.primary[200],
+                },
+              }),
+              (theme) =>
+                theme.applyDarkStyles({
+                  backgroundColor: alpha(theme.palette.primary[900], 0.2),
+                  borderColor: (theme.vars || theme).palette.primaryDark[700],
+                  '&:hover, &:focus-visible': {
+                    borderColor: (theme.vars || theme).palette.primaryDark[500],
+                  },
+                }),
+            ]}
+          >
+            <Typography
+              component="span"
+              variant="button"
+              sx={{ fontWeight: '500', color: 'text.primary' }}
+            >
+              {'🚀 Join the MUI team!'}
             </Typography>
-            <EventListener target="window" onScroll={this.handleScroll} />
-            <Typography component="ul" className={classes.ul}>
-              {this.itemsServer.map(item2 => (
-                <li key={item2.text}>
-                  <Link
-                    block
-                    color={active === item2.hash ? 'textPrimary' : 'textSecondary'}
-                    href={`#${item2.hash}`}
-                    className={classes.item}
-                  >
-                    <span dangerouslySetInnerHTML={{ __html: item2.text }} />
-                  </Link>
-                  {item2.children.length > 0 ? (
-                    <ul className={classes.ul}>
-                      {item2.children.map(item3 => (
-                        <li key={item3.text}>
-                          <Link
-                            block
-                            color={active === item3.hash ? 'textPrimary' : 'textSecondary'}
-                            href={`#${item3.hash}`}
-                            className={classes.item}
-                            style={{
-                              paddingLeft: 8 * 2,
-                            }}
-                          >
-                            <span dangerouslySetInnerHTML={{ __html: item3.text }} />
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              ))}
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{ fontWeight: 'normal', color: 'text.secondary', mt: 0.5 }}
+            >
+              {/* eslint-disable-next-line material-ui/no-hardcoded-labels */}
+              {"We're looking for React Engineers and other amazing roles－come find out more!"}
             </Typography>
-          </React.Fragment>
-        ) : null}
-      </nav>
-    );
-  }
+          </Link>
+        )}
+      </NoSsr>
+      {toc.length > 0 ? (
+        <React.Fragment>
+          <NavLabel>{t('tableOfContents')}</NavLabel>
+          <NavList component="ul">
+            {toc.map((item) => (
+              <li key={item.text}>
+                {itemLink(item)}
+                {item.children.length > 0 ? (
+                  <NavList as="ul">
+                    {item.children.map((subitem) => (
+                      <li key={subitem.text}>
+                        {itemLink(subitem, true)}
+                        {subitem.children?.length > 0 ? (
+                          <NavList as="ul">
+                            {subitem.children.map((nestedSubItem) => (
+                              <li key={nestedSubItem.text}>
+                                {itemLink(nestedSubItem, false, true)}
+                              </li>
+                            ))}
+                          </NavList>
+                        ) : null}
+                      </li>
+                    ))}
+                  </NavList>
+                ) : null}
+              </li>
+            ))}
+          </NavList>
+        </React.Fragment>
+      ) : null}
+      <DiamondSponsors />
+    </Nav>
+  );
 }
 
 AppTableOfContents.propTypes = {
-  classes: PropTypes.object.isRequired,
-  contents: PropTypes.array.isRequired,
+  toc: PropTypes.array.isRequired,
 };
-
-export default withStyles(styles)(AppTableOfContents);

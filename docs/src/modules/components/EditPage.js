@@ -1,38 +1,51 @@
-import React from 'react';
+import * as React from 'react';
 import PropTypes from 'prop-types';
-import Button from '@material-ui/core/Button';
-import { connect } from 'react-redux';
+import Button from '@mui/material/Button';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import { useUserLanguage, useTranslate } from '@mui/docs/i18n';
 
-function EditPage(props) {
-  const { markdownLocation, options, sourceCodeRootUrl } = props;
+const LOCALES = { zh: 'zh-CN', pt: 'pt-BR', es: 'es-ES' };
 
-  if (options.userLanguage === 'zh') {
-    return (
-      <Button component="a" href="https://translate.material-ui.com/">
-        {'将此页面翻译成中文'}
-      </Button>
-    );
+export default function EditPage(props) {
+  const { sourceLocation } = props;
+  const t = useTranslate();
+  const userLanguage = useUserLanguage();
+
+  if (!sourceLocation) {
+    // An empty div such that the footer layout stays unchanged.
+    return <div />;
   }
 
-  if (options.userLanguage === 'pt') {
-    return (
-      <Button component="a" href="https://translate.material-ui.com/">
-        {'Ajude a traduzir esta página'}
-      </Button>
-    );
-  }
+  const CROWDIN_ROOT_URL = 'https://crowdin.com/project/material-ui-docs/';
+  const crowdInLocale = LOCALES[userLanguage] || userLanguage;
+  const crowdInPath = sourceLocation.substring(0, sourceLocation.lastIndexOf('/'));
 
   return (
-    <Button component="a" href={`${sourceCodeRootUrl}${markdownLocation}`}>
-      {'Edit this page'}
+    <Button
+      component="a"
+      size="small"
+      variant="text"
+      color="secondary"
+      startIcon={<GitHubIcon sx={{ mr: 0.5 }} />}
+      href={
+        userLanguage === 'en'
+          ? `${process.env.SOURCE_CODE_REPO}/edit/${process.env.SOURCE_GITHUB_BRANCH}${sourceLocation}`
+          : `${CROWDIN_ROOT_URL}${crowdInLocale}#/${process.env.SOURCE_CODE_ROOT_URL.replace(
+              'https://github.com/mui/',
+              '',
+            ).replace('/blob/', '%20%2F%20')}${crowdInPath}`
+      }
+      target="_blank"
+      rel="noopener nofollow"
+      data-ga-event-category={userLanguage === 'en' ? undefined : 'l10n'}
+      data-ga-event-action={userLanguage === 'en' ? undefined : 'edit-button'}
+      data-ga-event-label={userLanguage === 'en' ? undefined : userLanguage}
+    >
+      {t('editPage')}
     </Button>
   );
 }
 
 EditPage.propTypes = {
-  markdownLocation: PropTypes.string.isRequired,
-  options: PropTypes.object.isRequired,
-  sourceCodeRootUrl: PropTypes.string.isRequired,
+  sourceLocation: PropTypes.string.isRequired,
 };
-
-export default connect(state => ({ options: state.options }))(EditPage);

@@ -1,38 +1,36 @@
-import React from 'react';
+import * as React from 'react';
 import PropTypes from 'prop-types';
-import { withStyles } from '@material-ui/core/styles';
-import LayoutBody from '../components/LayoutBody';
+import Container from '@mui/material/Container';
+import Box from '@mui/material/Box';
 import Paper from '../components/Paper';
 
-const styles = theme => ({
-  root: {
-    display: 'flex',
-    backgroundImage: 'url(/static/onepirate/appCurvyLines.png)',
-    backgroundRepeat: 'no-repeat',
-  },
-  paper: {
-    padding: `${theme.spacing.unit * 4}px ${theme.spacing.unit * 3}px`,
-    [theme.breakpoints.up('md')]: {
-      padding: `${theme.spacing.unit * 10}px ${theme.spacing.unit * 8}px`,
-    },
-  },
-});
-
 function AppForm(props) {
-  const { children, classes } = props;
+  const { children } = props;
 
   return (
-    <div className={classes.root}>
-      <LayoutBody margin marginBottom width="small">
-        <Paper className={classes.paper}>{children}</Paper>
-      </LayoutBody>
-    </div>
+    <Box
+      sx={{
+        display: 'flex',
+        backgroundImage: 'url(/static/onepirate/appCurvyLines.png)',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <Container maxWidth="sm">
+        <Box sx={{ mt: 7, mb: 12 }}>
+          <Paper
+            background="light"
+            sx={{ py: { xs: 4, md: 8 }, px: { xs: 3, md: 6 } }}
+          >
+            {children}
+          </Paper>
+        </Box>
+      </Container>
+    </Box>
   );
 }
 
 AppForm.propTypes = {
-  children: PropTypes.node.isRequired,
-  classes: PropTypes.object.isRequired,
+  children: PropTypes.node,
 };
 
-export default withStyles(styles)(AppForm);
+export default AppForm;

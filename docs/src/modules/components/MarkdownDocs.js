@@ -1,183 +1,107 @@
-import React from 'react';
+import * as React from 'react';
 import PropTypes from 'prop-types';
-import warning from 'warning';
-import { connect } from 'react-redux';
-import compose from 'recompose/compose';
-import { withStyles } from '@material-ui/core/styles';
-import Portal from '@material-ui/core/Portal';
-import MarkdownElement from '@material-ui/docs/MarkdownElement';
-import Head from 'docs/src/modules/components/Head';
-import AppContent from 'docs/src/modules/components/AppContent';
-import Demo from 'docs/src/modules/components/Demo';
-import AppFrame from 'docs/src/modules/components/AppFrame';
-import AppTableOfContents from 'docs/src/modules/components/AppTableOfContents';
-import Ad from 'docs/src/modules/components/Ad';
-import EditPage from 'docs/src/modules/components/EditPage';
-import MarkdownDocsContents from 'docs/src/modules/components/MarkdownDocsContents';
-import {
-  getHeaders,
-  getTitle,
-  getDescription,
-  demoRegexp,
-} from 'docs/src/modules/utils/parseMarkdown';
+import { useRouter } from 'next/router';
+import { useTheme } from '@mui/system';
+import { exactProp } from '@mui/utils';
+import { CssVarsProvider as JoyCssVarsProvider, useColorScheme } from '@mui/joy/styles';
+import { Ad, AdGuest } from '@mui/docs/Ad';
+import RichMarkdownElement from 'docs/src/modules/components/RichMarkdownElement';
+import { pathnameToLanguage } from 'docs/src/modules/utils/helpers';
+import AppLayoutDocs from 'docs/src/modules/components/AppLayoutDocs';
+import { useUserLanguage } from '@mui/docs/i18n';
+import { BrandingProvider } from '@mui/docs/branding';
 
-const styles = theme => ({
-  root: {
-    marginBottom: 100,
-  },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-  },
-  markdownElement: {
-    marginTop: theme.spacing.unit * 2,
-    marginBottom: theme.spacing.unit * 2,
-    padding: `0 ${theme.spacing.unit}px`,
-  },
-});
+function JoyModeObserver({ mode }) {
+  const { setMode } = useColorScheme();
+  React.useEffect(() => {
+    setMode(mode);
+  }, [mode, setMode]);
+  return null;
+}
 
-const SOURCE_CODE_ROOT_URL = 'https://github.com/mui-org/material-ui/blob/master';
+JoyModeObserver.propTypes = {
+  mode: PropTypes.oneOf(['light', 'dark']),
+};
 
-function MarkdownDocs(props) {
+export default function MarkdownDocs(props) {
+  const theme = useTheme();
+  const router = useRouter();
+  const { canonicalAs } = pathnameToLanguage(router.asPath);
   const {
-    classes,
-    disableAd,
-    markdown: markdownProp,
-    markdownLocation: markdownLocationProp,
-    req,
-    reqPrefix,
-    reqSource,
-    userLanguage,
+    disableAd = false,
+    disableToc = false,
+    /**
+     * Some pages, for example Joy theme builder, should not be a nested CssVarsProvider to control its own state.
+     * This config will skip the CssVarsProvider at the root of the page.
+     */
+    disableCssVarsProvider = false,
+    demos = {},
+    docs,
+    demoComponents,
+    srcComponents,
   } = props;
 
-  let demos;
-  let markdown = markdownProp;
+  const userLanguage = useUserLanguage();
+  const localizedDoc = docs[userLanguage] || docs.en;
 
-  if (req) {
-    demos = {};
-    const markdowns = {};
-    req.keys().forEach(filename => {
-      if (filename.indexOf('.md') !== -1) {
-        if (filename.indexOf('-zh.md') !== -1) {
-          markdowns.zh = req(filename);
-        } else {
-          markdowns.en = req(filename);
-        }
-      } else {
-        const demoName = `${reqPrefix}/${filename.replace(/.\/|.hooks/g, '')}`;
-        const isHooks = filename.indexOf('.hooks.js') !== -1;
-        const jsType = isHooks ? 'jsHooks' : 'js';
-        const rawType = isHooks ? 'rawHooks' : 'raw';
-        demos[demoName] = {
-          ...(demos[demoName] ? demos[demoName] : {}),
-          [jsType]: req(filename).default,
-          [rawType]: reqSource(filename),
-        };
-      }
-    });
-    markdown = markdowns[userLanguage] || markdowns.en;
-  }
-
-  const headers = getHeaders(markdown);
+  const isJoy = canonicalAs.startsWith('/joy-ui/') && !disableCssVarsProvider;
+  const CssVarsProvider = isJoy ? JoyCssVarsProvider : React.Fragment;
+  const Wrapper = isJoy ? BrandingProvider : React.Fragment;
+  const wrapperProps = {
+    ...(isJoy && { mode: theme.palette.mode }),
+  };
 
   return (
-    <MarkdownDocsContents markdown={markdown} markdownLocation={markdownLocationProp}>
-      {({ contents, markdownLocation }) => (
-        <AppFrame>
-          <Head
-            title={`${headers.title || getTitle(markdown)} - Material-UI`}
-            description={headers.description || getDescription(markdown)}
-          />
-          <AppTableOfContents contents={contents} />
-          {disableAd ? null : (
-            <Portal container={() => document.querySelector('.description')}>
-              <Ad />
-            </Portal>
-          )}
-          <AppContent className={classes.root}>
-            <div className={classes.header}>
-              <EditPage
-                markdownLocation={markdownLocation}
-                sourceCodeRootUrl={SOURCE_CODE_ROOT_URL}
-              />
-            </div>
-            {contents.map(content => {
-              if (demos && demoRegexp.test(content)) {
-                let demoOptions;
-                try {
-                  demoOptions = JSON.parse(`{${content}}`);
-                } catch (err) {
-                  console.error(err); // eslint-disable-line no-console
-                  return null;
-                }
-
-                const name = demoOptions.demo;
-                if (!demos || !demos[name]) {
-                  const errorMessage = [
-                    `Missing demo: ${name}. You can use one of the following:`,
-                    Object.keys(demos),
-                  ].join('\n');
-
-                  if (userLanguage === 'en') {
-                    throw new Error(errorMessage);
-                  }
-
-                  warning(false, errorMessage);
-
-                  const warnIcon = (
-                    <span role="img" aria-label="warning">
-                      ⚠️
-                    </span>
-                  );
-                  return (
-                    <div key={content}>
-                      {warnIcon} Missing demo `{name}` {warnIcon}
-                    </div>
-                  );
-                }
-
-                return (
-                  <Demo
-                    key={content}
-                    demo={demos[name]}
-                    demoOptions={demoOptions}
-                    githubLocation={`${SOURCE_CODE_ROOT_URL}/docs/src/${name}`}
-                  />
-                );
-              }
-
-              return (
-                <MarkdownElement className={classes.markdownElement} key={content} text={content} />
-              );
-            })}
-          </AppContent>
-        </AppFrame>
+    <AppLayoutDocs
+      cardOptions={{
+        description: localizedDoc.headers.cardDescription,
+        title: localizedDoc.headers.cardTitle,
+      }}
+      description={localizedDoc.description}
+      disableAd={disableAd}
+      disableToc={disableToc}
+      location={localizedDoc.location}
+      title={localizedDoc.title}
+      toc={localizedDoc.toc}
+    >
+      {disableAd ? null : (
+        <BrandingProvider>
+          <AdGuest>
+            <Ad />
+          </AdGuest>
+        </BrandingProvider>
       )}
-    </MarkdownDocsContents>
+      <CssVarsProvider>
+        {isJoy && <JoyModeObserver mode={theme.palette.mode} />}
+        {localizedDoc.rendered.map((renderedMarkdownOrDemo, index) => (
+          <RichMarkdownElement
+            key={`demos-section-${index}`}
+            demoComponents={demoComponents}
+            demos={demos}
+            disableAd={disableAd}
+            localizedDoc={localizedDoc}
+            renderedMarkdownOrDemo={renderedMarkdownOrDemo}
+            srcComponents={srcComponents}
+            theme={theme}
+            WrapperComponent={Wrapper}
+            wrapperProps={wrapperProps}
+          />
+        ))}
+      </CssVarsProvider>
+    </AppLayoutDocs>
   );
 }
 
 MarkdownDocs.propTypes = {
-  classes: PropTypes.object.isRequired,
+  demoComponents: PropTypes.object,
+  demos: PropTypes.object,
   disableAd: PropTypes.bool,
-  markdown: PropTypes.string,
-  // You can define the direction location of the markdown file.
-  // Otherwise, we try to determine it with an heuristic.
-  markdownLocation: PropTypes.string,
-  req: PropTypes.func,
-  reqPrefix: PropTypes.string,
-  reqSource: PropTypes.func,
-  userLanguage: PropTypes.string.isRequired,
+  disableCssVarsProvider: PropTypes.bool,
+  disableToc: PropTypes.bool,
+  docs: PropTypes.object.isRequired,
+  srcComponents: PropTypes.object,
 };
 
-MarkdownDocs.defaultProps = {
-  disableAd: false,
-};
-
-export default compose(
-  connect(state => ({
-    userLanguage: state.options.userLanguage,
-  })),
-  withStyles(styles),
-)(MarkdownDocs);
+if (process.env.NODE_ENV !== 'production') {
+  MarkdownDocs.propTypes = exactProp(MarkdownDocs.propTypes);
+}
